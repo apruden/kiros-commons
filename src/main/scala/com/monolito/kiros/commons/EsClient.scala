@@ -22,6 +22,7 @@ object EsJsonProtocol extends DefaultJsonProtocol {
   implicit object AnyJsonFormat extends JsonFormat[Any] {
     def write(x: Any) = x match {
       case n: Int => JsNumber(n)
+      case l: Long => JsNumber(l)
       case s: String => JsString(s)
       case b: Boolean => if (b) JsTrue else JsFalse
       case q: Seq[Any] => JsArray(q.map(write(_)).toVector)
@@ -30,7 +31,7 @@ object EsJsonProtocol extends DefaultJsonProtocol {
     }
 
     def read(value: JsValue): Any = value match {
-      case JsNumber(n) => n.intValue()
+      case JsNumber(n) => if (n.intValue == n.longValue) n.intValue else n.longValue
       case JsString(s) => s
       case JsTrue => true
       case JsFalse => false
@@ -99,7 +100,10 @@ object EsClient extends SprayJsonSupport with PredefinedToEntityMarshallers {
       resp <- Http().singleRequest(HttpRequest(uri = s"$host/$typ/_search", method = HttpMethods.POST, entity = req))
       d <- Unmarshal(resp.entity).to[Map[String, Any]]
       r <- Future {
-        d.getOrElse("aggregations", Map()).asInstanceOf[Map[String, Any]].getOrElse("result", Map()).asInstanceOf[Map[String, Any]].getOrElse("buckets", List()).asInstanceOf[Seq[Map[String, Any]]].toList
+        d.getOrElse("aggregations", Map()).asInstanceOf[Map[String, Any]] //
+          .getOrElse("result", Map()).asInstanceOf[Map[String, Any]] //
+          .getOrElse("buckets", List()).asInstanceOf[Seq[Map[String, Any]]] //
+          .toList
       }
     } yield r
   }

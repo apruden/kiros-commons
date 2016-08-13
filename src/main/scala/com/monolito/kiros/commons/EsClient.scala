@@ -48,30 +48,29 @@ object EsClient extends SprayJsonSupport with PredefinedToEntityMarshallers {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   val conf = ConfigFactory.load()
-  val hostRoot = conf.getString("kiros.index-root")
-  val host = conf.getString("kiros.index-url")
+  val host = conf.getString("kiros.search-host")
 
-  def createIndex(mapping: Map[String, Any]): Future[Any] =
+  def createIndex(idx: String, mapping: Map[String, Any]): Future[Any] =
     for {
       req <- Marshal(mapping).to[RequestEntity]
-      resp <- Http().singleRequest(HttpRequest(uri = host, method = HttpMethods.POST, entity = req))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx", method = HttpMethods.POST, entity = req))
     } yield resp
 
   def esSave(idx: String, typ: String, document: Map[String, Any]): Future[Any] =
     for {
       req <- Marshal(document).to[RequestEntity]
-      resp <- Http().singleRequest(HttpRequest(uri = s"$hostRoot/$idx/$typ", method = HttpMethods.POST, entity = req))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx/$typ", method = HttpMethods.POST, entity = req))
     } yield resp
 
-  def put(typ: String, id: String, document: Map[String, Any]): Future[Any] =
+  def put(idx: String, typ: String, id: String, document: Map[String, Any]): Future[Any] =
     for {
       req <- Marshal(document).to[RequestEntity]
-      resp <- Http().singleRequest(HttpRequest(uri = s"$hostRoot/$typ/$id", method = HttpMethods.PUT, entity = req))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx/$typ/$id", method = HttpMethods.PUT, entity = req))
     } yield resp
 
-  def get(typ: String, id: String): Future[Option[Map[String, Any]]] =
+  def get(idx: String, typ: String, id: String): Future[Option[Map[String, Any]]] =
     for {
-      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$typ/$id", method = HttpMethods.GET))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx/$typ/$id", method = HttpMethods.GET))
       d <- Unmarshal(resp.entity).to[Map[String, Any]]
       r <- Future {
         d.get("_source").asInstanceOf[Option[Map[String, Any]]]
@@ -79,12 +78,12 @@ object EsClient extends SprayJsonSupport with PredefinedToEntityMarshallers {
       }
     } yield r
 
-  def del(typ: String, id: String): Future[Unit] = ???
+  def del(idx: String, typ: String, id: String): Future[Unit] = ???
 
-  def query(typ: String, query: Map[String, Any]): Future[List[Map[String, Any]]] = {
+  def query(idx: String, typ: String, query: Map[String, Any]): Future[List[Map[String, Any]]] = {
     for {
       req <- Marshal(query + ("version" -> true)).to[RequestEntity]
-      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$typ/_search", method = HttpMethods.POST, entity = req))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx/$typ/_search", method = HttpMethods.POST, entity = req))
       d <- Unmarshal(resp.entity).to[Map[String, Any]]
       r <- Future {
         d.getOrElse("hits", Map()).asInstanceOf[Map[String, Any]]
@@ -94,10 +93,10 @@ object EsClient extends SprayJsonSupport with PredefinedToEntityMarshallers {
     } yield r
   }
 
-  def aggs(typ: String, query: Map[String, Any]): Future[List[Map[String, Any]]] = {
+  def aggs(idx: String, typ: String, query: Map[String, Any]): Future[List[Map[String, Any]]] = {
     for {
       req <- Marshal(query).to[RequestEntity]
-      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$typ/_search", method = HttpMethods.POST, entity = req))
+      resp <- Http().singleRequest(HttpRequest(uri = s"$host/$idx/$typ/_search", method = HttpMethods.POST, entity = req))
       d <- Unmarshal(resp.entity).to[Map[String, Any]]
       r <- Future {
         d.getOrElse("aggregations", Map()).asInstanceOf[Map[String, Any]] //
